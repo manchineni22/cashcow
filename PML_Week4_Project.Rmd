@@ -1,0 +1,155 @@
+---
+title: "PML_Week4_Project"
+author: "Veera"
+date: "2/18/2020"
+output: html_document
+---
+
+# Project Description
+
+The goal of our project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases
+
+# Load Required Libraries  
+```{r}
+library(tidyr)
+library(naniar)
+library(caret)
+library(hutils)
+set.seed(3234)
+```
+
+# Data Loading From Source  
+
+```{r setup, include=TRUE}
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(url, destfile = "pml-training.csv")
+hra_data = read.csv("pml-training.csv", na.strings=c("NA","","#DIV/0!"))
+
+hra_data1<-hra_data
+
+url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(url, destfile = "pml-testing.csv")
+quiz_data = read.csv("pml-testing.csv",na.strings=c("NA","","#DIV/0!"))
+
+
+```
+
+# Exploring Data 
+
+Few Commands commented to avoid the space consumtion like edit ..etc.
+
+```{r}
+#names(training_data)
+#rowSums(is.na(training_data))
+dim(hra_data)
+dim(quiz_data)
+#edit(training_data)
+#edit(test_data)
+```
+
+# Data Cleaning After Verification
+
+# Step1 Removing Non Informative Columns
+
+Datasets come sometimes with predictors that take an unique value across samples. Such uninformative predictor is more common than you might think. This kind of predictor is not only non-informative, it can break some models you may want to fit to your data
+
+```{r}
+nzv_idx <- nearZeroVar(hra_data)
+nzv_idx
+hra_data <- hra_data[,-nzv_idx]
+dim(hra_data)
+```
+
+
+# Step2 Remove Non Numeric Informative Columns
+
+The very first 7 variables are of this sort,  Hence those needs to be removed from the dataset.
+
+```{r}
+hra_data<-hra_data[,-c(1:7)]
+dim(hra_data)
+```
+
+# Step3 Replace all NAs with 0
+
+In the data set replace NAs with 0 if any.
+
+```{r}
+hra_data[is.na(hra_data)] <- 0
+dim(hra_data)
+#edit(hra_data)
+```
+
+# Step3 Recursive Feature Elimination
+
+The RFE algorithm  allows visualization of each one the RFE iterations, and hence, identification of the most relevant predictors of the response variable. based on this we will condider top 50 columns which are relavant to our classe .
+
+```{r}
+control <- rfeControl(functions=rfFuncs, method="cv", number=3)
+results <- rfe(hra_data[,1:116], hra_data[,117], 
+               sizes = ncol(hra_data), rfeControl=control)
+top50_rows<-as.data.frame(varImp(results$fit))
+hra_data<-hra_data[,names(hra_data) %in% head(row.names(top50_rows),50)]
+
+hra_data<-cbind(hra_data,hra_data1$classe)
+names(hra_data)[names(hra_data) == "hra_data1$classe"] <- "Classe"
+dim(hra_data)
+```
+
+## Data Partition
+
+Divide data into two sets ,one for train the model and one for verify the model fit.
+
+```{r}
+idx <- createDataPartition(y=hra_data$Classe, p=0.7, list=FALSE)
+
+training_data <- hra_data[idx,]
+testing_data <- hra_data[-idx,]
+dim(training_data)
+dim(testing_data)
+```
+
+
+# Build Models
+Data cleaned up ,now run model one by one ,based on accuracy will select the best model for our data.
+
+## Model1 : Decision Tree 
+
+```{r}
+Sys.time()
+dt_model<-train(Classe~.,method="rpart",data = training_data)
+dt_predict<-predict(dt_model,testing_data)
+Sys.time()
+confusionMatrix(dt_predict,testing_data$Classe)
+```
+
+## Model2  Random Forest
+
+```{r}
+Sys.time()
+rf_model<-train(Classe~.,method="rf",data = training_data)
+Sys.time()
+rf_predict<-predict(rf_model,testing_data)
+confusionMatrix(rf_predict,testing_data$Classe)
+```
+
+## Model3 : Gradient Boosting Model
+
+```{r}
+Sys.time()
+gbf_model<-train(Classe~.,method="gbm",data = training_data,verbose=FALSE)
+Sys.time()
+gbf_predict<-predict(gbf_model,testing_data)
+confusionMatrix(gbf_predict,testing_data$Classe)
+```
+
+
+# Conclusion
+
+Based On Accuracy rate (99%) will use RandomForest model to precit Quiz data.
+
+```{r}
+#predict(rf_predict, quiz_data)
+
+```
+
